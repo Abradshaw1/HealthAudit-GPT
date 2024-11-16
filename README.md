@@ -23,8 +23,8 @@ This repository audits and analyzes the outputs of open-source language models b
 ### 1. Setup
 Clone this repository:
 ```bash
-git clone <repository_url>
-cd <repository_folder>
+git clone https://github.com/Abradshaw1/HealthAudit-GPT.git
+cd infrerence
 ```
 ### Requirements
 
