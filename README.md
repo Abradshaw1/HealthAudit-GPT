@@ -7,8 +7,6 @@ This repository audits and analyzes the outputs of open-source language models b
 - Generates a CSV file for each model containing structured outputs for further analysis.
 - Includes additive variations and redacted prompts to assess model biases or sensitivities.
 
----
-
 ## Prompts
 
 1. **Standard Prompts**:
@@ -19,8 +17,6 @@ This repository audits and analyzes the outputs of open-source language models b
 
 2. **Additive Variants** *(Optional)*:
    - Add prompts with varying age, gender, race, or symptoms to test model sensitivities.
-
----
 
 ## Requirements
 To successfully run the notebook, the following Python libraries are required:
