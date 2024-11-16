@@ -24,7 +24,7 @@ This repository audits and analyzes the outputs of open-source language models b
 Clone this repository:
 ```bash
 git clone https://github.com/Abradshaw1/HealthAudit-GPT.git
-cd infrerence
+cd inference
 ```
 ### Requirements
 
