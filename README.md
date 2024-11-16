@@ -18,12 +18,24 @@ This repository audits and analyzes the outputs of open-source language models b
 2. **Additive Variants** *(Optional)*:
    - Add prompts with varying age, gender, race, or symptoms to test model sensitivities.
 
-## Requirements
+## Usage
+
+### 1. Setup
+Clone this repository:
+```bash
+git clone <repository_url>
+cd <repository_folder>
+
+### Requirements
+
 To successfully run the notebook, the following Python libraries are required:
 - `transformers` (for loading and running the models)
 - `pandas` (for handling data and generating CSV files)
 - `torch` (as the backend for model inference)
+- `torchvision`
+- `torchaudio`
 
 Install the requirements with:
 ```bash
-pip install transformers pandas torch
+pip install transformers pandas torch torchvision torchaudio
+
