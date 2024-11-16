@@ -26,9 +26,23 @@ Clone this repository:
 git clone https://github.com/Abradshaw1/HealthAudit-GPT.git
 cd inference
 ```
+#### Create Environment
+1. Use the .yml to create your env
+```bash
+conda env create -f environment.yml
+```
+2. Activate your environment
+```bash
+conda activate healthaudit-gpt
+```
+3. Launch Notebook
+```bash
+jupyter notebook
+```
+
 ### Requirements
 
-To successfully run the notebook, the following Python libraries are required:
+To successfully run the notebook, the following Python libraries are required(handled in the env):
 - `transformers` (for loading and running the models)
 - `pandas` (for handling data and generating CSV files)
 - `torch` (as the backend for model inference)
@@ -38,4 +52,5 @@ To successfully run the notebook, the following Python libraries are required:
 Install the requirements with:
 ```bash
 pip install transformers pandas torch torchvision torchaudio
+```
 
