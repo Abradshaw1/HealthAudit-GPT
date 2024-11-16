@@ -35,7 +35,15 @@ conda env create -f environment.yml
 ```bash
 conda activate healthaudit-gpt
 ```
-3. Launch Notebook
+3. Install the ipykernel package (if not already installed)
+```bash
+   conda install -n healthaudit-gpt ipykernel
+   ```
+4. Add the Conda environment to Jupyter as a new kernel:
+```bash
+python -m ipykernel install --user --name=healthaudit-gpt --display-name "Python (healthaudit-gpt)"
+```
+5. Launch Notebook
 ```bash
 jupyter notebook
 ```
