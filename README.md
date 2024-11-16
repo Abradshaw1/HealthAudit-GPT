@@ -25,7 +25,7 @@ Clone this repository:
 ```bash
 git clone <repository_url>
 cd <repository_folder>
-
+```
 ### Requirements
 
 To successfully run the notebook, the following Python libraries are required:
