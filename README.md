@@ -1,24 +1,35 @@
 # HealthAudit-GPT
-Audit the clinical diagnostic capabilities of low parameter generative pretrained transformers such as flan-T5-small(80M), DistilGPT-2(82) and GPT-Neo(125M)
+Audit the clinical diagnostic capabilities of low parameter generative pretrained transformers such as flan-T5-small(80M), DistilGPT-2(82) and GPT-Neo(125M) focusing on bias and reliability in few-shot tasks.
 
 ## Overview
-This repository audits and analyzes the outputs of open-source language models based on variations and keyword redacting in input prompts.
-- Uses models like `Flan-T5-Small`, `DistilGPT-2`, and `GPT-Neo (125M)` to evaluate how model outputs change when different parts of a prompt are redacted.
-- Generates a CSV file for each model containing structured outputs for further analysis.
-- Includes additive variations and redacted prompts to assess model biases or sensitivities.
+This repository focuses on auditing and analyzing the diagnostic reliability and bias of small open-source language models in zero-shot diagnostic tasks. It evaluates the models' outputs across diverse demographic prompts for four diseases: cancer, lupus, hypertension, and myocardial infarction.
 
-## Prompts
+### Models Tested
+- `Flan-T5-Small (80M)`
+- `DistilGPT-2 (82M)`
+- `GPT-Neo (125M)`
 
-1. **Standard Prompts**:
-   - Full Prompt: `"A 22-year-old male presents with persistent chest pain, night sweats, and weight loss. What could be potential diagnoses?"`
-   - Redacted Age: `"A male presents with persistent chest pain, night sweats, and weight loss. What could be potential diagnoses?"`
-   - Redacted Gender: `"A 22-year-old patient presents with persistent chest pain, night sweats, and weight loss. What could be potential diagnoses?"`
-   - Fully Redacted: `"A patient presents with persistent chest pain, night sweats, and weight loss. What could be potential diagnoses?"`
+### Goals 
+1. Assess zero-few-shot diagnostic performance.
+2. Analyze the influence of demographic factors (age, ethnicity, sex).
+3. Identify biases or inconsistencies.
+4. Generate structured synthetic datasets for evaluation.
 
-2. **Additive Variants** *(Optional)*:
-   - Add prompts with varying age, gender, race, or symptoms to test model sensitivities.
+## Prompts Structure
+
+1. **Disease-Specific Prompts: Combine diseases with demographic details (age, ethnicity, sex).**:
+- Example: `"Provide a single possible diagnosis for a 50-year-old white male experiencing symptoms of weight loss, fatigue, night sweats, persistent cough, and localized pain."`
+
+2. **Demographic Variants**
+   - Age: `"20, 50, 80 years."`
+   - Ethnicity: `"White, Black, Asian, Hispanic"`
+   - Sex: `"Male, female, bisexual."`
 
 ## Usage
+
+### System requirnemts
+
+1. GPU Strongly Recomended ~16GB RAM, CPU ~ 64GM RAM 
 
 ### 1. Setup
 Clone this repository:
