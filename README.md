@@ -73,3 +73,81 @@ Install the requirements with:
 pip install transformers pandas torch torchvision torchaudio
 ```
 
+## Model Clustering Analysis
+
+The `modelclustering.qmd` script performs a clustering analysis on model outputs to assess diagnostic sensitivity and adaptability to demographic variations.
+
+### Libraries
+
+The following R libraries are required:
+
+```r
+library(dplyr)
+library(ggplot2)
+library(tidytext)
+library(text2vec)
+library(umap)
+library(data.table)
+library(topicmodels)
+library(widyr)
+library(igraph)
+library(ggraph)
+```
+
+### Loading the Data
+
+Specify the path to your folder and load each model's data:
+
+```r
+path <- "your_path"
+
+distilgpt2 <- read.csv(file.path(path, "distilgpt2_outputs.csv"))
+flan_t5_small <- read.csv(file.path(path, "flan_t5_small_outputs.csv"))
+gpt_neo_125 <- read.csv(file.path(path, "gpt_neo_125m_outputs.csv"))
+
+all_models <- bind_rows(
+  distilgpt2 %>% mutate(Model = "DistilGPT-2"),
+  flan_t5_small %>% mutate(Model = "Flan-T5-Small"),
+  gpt_neo_125 %>% mutate(Model = "GPT-Neo-125")
+)
+```
+### Analyzing Diagnostic Sensitivity
+
+The script calculates the cancer diagnosis rate across prompt types (Full, Redacted Age, Redacted Gender, Fully Redacted).
+
+```r
+all_models <- all_models %>%
+  mutate(Correct_Diagnosis = grepl("cancer", Model.Output, ignore.case = TRUE))
+```
+
+### Chi-Square Test of Independence
+The Chi-square test evaluates the independence between prompt type and diagnostic accuracy.
+
+```r
+chi_square_results <- all_models %>%
+  group_by(Model) %>%
+  summarise(
+    Chi_Square_Test = list(
+      chisq.test(table(Correct_Diagnosis, Prompt.Type))
+    )
+  )
+```
+### Clustering Model Outputs Based on Text Embeddings
+
+1. **Preprocess Text Data**: Converts to lowercase and removes punctuation.
+2. **Load GloVe Embeddings**: Downloads GloVe embeddings and loads them into R.
+3. **Generate Sentence Embeddings**: Computes average word embeddings for each output.
+4. **K-means Clustering**: Groups outputs into clusters to explore model behavior.
+5. **UMAP Visualization**: Reduces embeddings to 2D and visualizes clusters.
+
+```r
+glove_clustering <- ggplot(umap_df, aes(x = V1, y = V2, color = Cluster, shape = Prompt.Type)) +
+  geom_point(alpha = 0.7, size = 2) +
+  labs(
+    title = "Clustering of Model Outputs Based on Text Embeddings",
+    x = "UMAP Dimension 1",
+    y = "UMAP Dimension 2"
+  ) +
+  theme_minimal()
+```
+

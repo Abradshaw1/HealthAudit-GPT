@@ -1,0 +1,378 @@
+## Libraries
+
+```{r echo = FALSE}
+library(dplyr)
+library(ggplot2)
+library(tidytext)
+library(text2vec)
+library(umap)
+library(data.table)
+library(topicmodels)
+library(widyr)
+library(igraph)
+library(ggraph)
+```
+
+## Load the Data
+
+```{r echo = FALSE}
+# Define the path to your folder
+path <- "C:/Users/jandr/OneDrive/Documents/TextAnalysis/HealthAudit"
+
+# Load each model's data
+distilgpt2 <- read.csv(file.path(path, "distilgpt2_outputs.csv"))
+flan_t5_small <- read.csv(file.path(path, "flan_t5_small_outputs.csv"))
+gpt_neo_125 <- read.csv(file.path(path, "gpt_neo_125m_outputs.csv"))
+
+# Combine all data into one dataframe, adding a column to identify the model
+all_models <- bind_rows(
+  distilgpt2 %>% mutate(Model = "DistilGPT-2"),
+  flan_t5_small %>% mutate(Model = "Flan-T5-Small"),
+  gpt_neo_125 %>% mutate(Model = "GPT-Neo-125")
+)
+```
+
+## Impact of Redactions on Diagnostic Accuracy
+
+-    Calculate the proportion of correct diagnoses ("cancer") across different redactions. If removing age or gender information reduces the frequency of "cancer" mentions, it could indicate that the model relies heavily on demographic cues rather than symptoms alone.
+
+### Step 1: Create a Flag for Cancer
+
+Add a column to indicate whether "cancer" is mentioned in the `Model.Output`.
+
+```{r}
+
+all_models <- all_models %>%
+  mutate(Correct_Diagnosis = grepl("cancer", Model.Output, ignore.case = TRUE))
+
+```
+
+### Step 2: Calculate Cancer Diagnosis Rate by Model and Prompt Type
+
+Calculate the proportion of "cancer" mentions by grouping the data by `Model` and `Prompt.Type`.
+
+```{r}
+
+cancer_diagnosis_by_prompt <- all_models %>%
+  group_by(Model, Prompt.Type) %>%
+  summarize(
+    Cancer_Diagnosis_Freq = sum(Correct_Diagnosis),
+    Total_Samples = n(),
+    Cancer_Diagnosis_Rate = mean(Correct_Diagnosis)
+  ) %>%
+  arrange(desc(Cancer_Diagnosis_Rate))
+
+# Display the summary table
+print(cancer_diagnosis_by_prompt)
+
+```
+
+\pagebreak
+
+## Model Sensitivity to Demographic Information
+
+### Step 1: Calculate Cancer Diagnosis Rate by Prompt Type and Model
+
+We'll use `Correct_Diagnosis` (1 if "cancer" is mentioned, 0 otherwise) and calculate the proportion for each `Prompt.Type` and `Model`. This step allows us to see if the presence or absence of demographic information impacts each model's diagnosis rate.
+
+```{r}
+# Calculate cancer diagnosis rate by Model and Prompt Type
+demographic_sensitivity <- all_models %>%
+  group_by(Model, Prompt.Type) %>%
+  summarize(
+    Cancer_Diagnosis_Freq = sum(Correct_Diagnosis),
+    Total_Samples = n(),
+    Cancer_Diagnosis_Rate = mean(Correct_Diagnosis)
+  ) %>%
+  arrange(Model, Prompt.Type)
+
+# Display the demographic sensitivity summary table
+print(demographic_sensitivity)
+
+```
+
+### Step 2: Visualize Sensitivity to Demographic Information
+
+To understand the variations in diagnosis rates across prompt types and models, we can use a **facet grid** of bar plots, with each facet representing a model and each bar showing a different prompt type.
+
+```{r}
+
+cancer_diagnosis_rate <- ggplot(demographic_sensitivity, aes(x = Prompt.Type, y = Cancer_Diagnosis_Rate, fill = Prompt.Type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Model) +
+  labs(
+    title = "Model Sensitivity to Demographic Information (Cancer Diagnosis Rate)",
+    x = "Prompt Type",
+    y = "Cancer Diagnosis Rate"
+  ) +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set2") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)  # Tilts x-axis text labels at 45 degrees
+  )
+
+cancer_diagnosis_rate
+
+# ggsave("cancer_diagnosis_rate.png", plot = cancer_diagnosis_rate, width = 8, height = 6, dpi = 300)
+
+
+```
+
+\pagebreak
+
+## Statistical Testing
+
+### Chi-Square Test of Independence
+
+The Chi-Square test is suitable if we treat `Correct_Diagnosis` as a categorical variable (1 if "cancer" is mentioned, 0 otherwise). We'll perform the test separately for each model.
+
+```{r}
+# Perform Chi-Square Test for each model
+chi_square_results <- all_models %>%
+  group_by(Model) %>%
+  summarise(
+    Chi_Square_Test = list(
+      chisq.test(table(Correct_Diagnosis, Prompt.Type))
+    )
+  )
+
+# Display the results
+chi_square_results$Chi_Square_Test
+
+```
+
+\pagebreak
+
+## Keyword Frequency Analysis
+
+### Step 1: Define Keywords of Interest
+
+```{r}
+
+keywords <- c("infection", "tumor", "chest pain")
+
+```
+
+### Step 2: Tokenize `Model.Output` and Filter for Keywords
+
+We’ll split the text in `Model.Output` into individual words and filter for the keywords we’re interested in.
+
+```{r}
+# Tokenize Model.Output and filter for keywords
+keyword_counts <- all_models %>%
+  unnest_tokens(word, Model.Output) %>%
+  filter(word %in% keywords) %>%
+  count(Model, Prompt.Type, word, sort = TRUE)
+
+```
+
+### Step 3: Reshape Data for Easier Comparison
+
+We’ll now reshape the data to make it easier to see the frequency of each keyword by `Prompt.Type` and `Model`.
+
+```{r}
+# Pivot the data to create a more readable format
+keyword_frequency <- keyword_counts %>%
+  group_by(Model, Prompt.Type, word) %>%
+  summarise(Frequency = sum(n)) %>%
+  ungroup()
+
+print(keyword_frequency)
+
+```
+
+### Step 5: Visualize Keyword Frequencies
+
+```{r}
+
+ggplot(keyword_frequency, aes(x = word, y = Frequency, fill = Prompt.Type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Model) +
+  labs(
+    title = "Keyword Frequency Analysis by Model and Prompt Type",
+    x = "Keyword",
+    y = "Frequency"
+  ) +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set2")
+
+```
+
+\pagebreak
+
+### **Clustering Model Outputs Based on Text Embeddings**
+
+-   **Objective**: Group similar outputs to see if specific clusters are associated with particular prompt types or models.
+
+### Step 1: Preprocess Text Data
+
+```{r}
+# Preprocess the text data by removing punctuation and converting to lowercase
+all_models_clean <- all_models %>%
+  mutate(Model.Output.Clean = tolower(Model.Output) %>%
+           gsub("[[:punct:]]", "", .))
+
+```
+
+### Step 2: Download and Load GloVe Embeddings
+
+-   **Download GloVe Embeddings**:
+
+    -   If you haven't already, download the GloVe embeddings from <https://nlp.stanford.edu/projects/glove/>.
+
+    -   For this analysis, download **glove.6B.zip** under "Wikipedia + Gigaword 5" and extract the files. You’ll find files like `glove.6B.50d.txt`, `glove.6B.100d.txt`, etc.
+
+    -   Place the extracted file (e.g., `glove.6B.50d.txt`) in a folder that you can access.
+
+-   **Load GloVe Embeddings**:
+
+    -   Set the path to where you saved the GloVe file and load it.
+
+```{r}
+# Path to the GloVe embeddings file
+glove_path <- "C:/Users/jandr/OneDrive/Documents/TextAnalysis/HealthAudit/glove.6B/glove.6B.50d.txt"
+
+# Load GloVe embeddings into R
+glove <- fread(glove_path, header = FALSE, quote = "")
+glove_words <- glove$V1
+glove_matrix <- as.matrix(glove[, -1, with = FALSE])
+rownames(glove_matrix) <- glove_words
+
+
+```
+
+### Step 3: Generate Sentence Embeddings for Each Model Output
+
+In this step, we’ll create embeddings for each sentence by averaging the GloVe embeddings of the words in each `Model.Output`. We’ll use a helper function to do this.
+
+1.  **Ensure** that you have a column named `Model.Output.Clean` in your data that contains the preprocessed text (e.g., lowercase, punctuation removed).
+
+2.  **Run the following code** to generate the embeddings:
+
+```{r}
+# Function to get embedding for a sentence by averaging word embeddings
+get_sentence_embedding <- function(sentence, embedding_matrix) {
+  words <- unlist(strsplit(sentence, " "))
+  word_indices <- match(words, rownames(embedding_matrix))
+  word_embeddings <- embedding_matrix[word_indices[!is.na(word_indices)], , drop = FALSE]
+  
+  if (nrow(word_embeddings) > 0) {
+    colMeans(word_embeddings)
+  } else {
+    rep(NA, ncol(embedding_matrix))  # Return NA if no valid word embeddings found
+  }
+}
+
+# Apply the function to each Model.Output to create embeddings
+all_models_clean$embedding <- lapply(all_models_clean$Model.Output.Clean, get_sentence_embedding, embedding_matrix = glove_matrix)
+
+```
+
+This code will add a new column, `embedding`, to `all_models_clean`, where each row contains the sentence embedding for the corresponding `Model.Output.Clean`.
+
+### Step 4: Prepare the Embedding Matrix for Clustering
+
+Run the following code to filter out rows with `NA` values and create a clean matrix for clustering:
+
+```{r}
+# Convert list-column of embeddings into a matrix
+embedding_matrix <- do.call(rbind, all_models_clean$embedding)
+
+# Remove rows with NA embeddings
+all_models_clean <- all_models_clean[!is.na(rowSums(embedding_matrix)), ]
+embedding_matrix <- embedding_matrix[!is.na(rowSums(embedding_matrix)), ]
+
+```
+
+This code:
+
+-   Converts the list of embeddings into a matrix for easy manipulation.
+
+-   Removes rows with `NA` embeddings, ensuring the matrix is clean and ready for clustering.
+
+### Step 5: Perform K-means Clustering on the Embeddings
+
+For this step, we’ll apply K-means clustering on the `embedding_matrix` to group similar model outputs. We’ll start with 3 clusters, but you can adjust the number of clusters if you wish to experiment.
+
+```{r}
+# Perform K-means clustering
+set.seed(42)  # Set seed for reproducibility
+kmeans_result <- kmeans(embedding_matrix, centers = 3)  # You can adjust the number of clusters
+
+# Add cluster assignments back to the original data
+all_models_clean$Cluster <- kmeans_result$cluster
+
+```
+
+This code:
+
+-   Performs K-means clustering on the `embedding_matrix` and assigns each row (model output) to a cluster.
+
+-   Adds the cluster assignments as a new column, `Cluster`, in `all_models_clean`.
+
+### Step 6: Use UMAP for Dimensionality Reduction and Visualize the Clusters
+
+Run the following code to apply UMAP and then plot the results with `ggplot2`.
+
+```{r}
+# Perform UMAP dimensionality reduction
+umap_result <- umap(embedding_matrix, n_neighbors = 15, min_dist = 0.1, n_components = 2)
+
+# Create a data frame for plotting
+umap_df <- as.data.frame(umap_result$layout)
+umap_df$Cluster <- factor(all_models_clean$Cluster)  # Add clusters as a factor
+umap_df$Model <- all_models_clean$Model
+umap_df$Prompt.Type <- all_models_clean$Prompt.Type
+
+# Plot the UMAP clusters
+glove_clustering <- ggplot(umap_df, aes(x = V1, y = V2, color = Cluster, shape = Prompt.Type)) +
+  geom_point(alpha = 0.7, size = 2) +
+  labs(
+    title = "Clustering of Model Outputs Based on Text Embeddings",
+    x = "UMAP Dimension 1",
+    y = "UMAP Dimension 2",
+    color = "Cluster",
+    shape = "Prompt Type"
+  ) +
+  theme_minimal() +
+  scale_color_brewer(palette = "Set1")
+
+glove_clustering
+
+# ggsave("glove_clustering.png", plot = glove_clustering, width = 8, height = 6, dpi = 300)
+```
+
+This code:
+
+-   Uses UMAP to reduce the dimensionality of the embeddings to 2D.
+
+-   Creates a scatter plot where each point represents a model output, colored by cluster and shaped by `Prompt.Type`.
+
+```{r}
+glove_clustering_faceted <- ggplot(umap_df, aes(x = V1, y = V2, color = Cluster, shape = Prompt.Type)) +
+  geom_point(alpha = 0.6, size = 3, position = position_jitter(width = 0.2, height = 0.2)) +
+  labs(
+    title = "Clustering of Model Outputs Based on Text Embeddings",
+    x = "UMAP Dimension 1",
+    y = "UMAP Dimension 2",
+    color = "Cluster",
+    shape = "Prompt Type"
+  ) +
+  theme_minimal() +
+  scale_color_brewer(palette = "Set1") +
+  facet_wrap(~ Prompt.Type)
+
+glove_clustering_faceted
+
+# ggsave("glove_clustering_faceted.png", plot = glove_clustering_faceted, width = 8, height = 6, dpi = 300)
+
+```
+
+```{r}
+# Check distribution of models across clusters
+model_cluster_distribution <- all_models_clean %>%
+  group_by(Model, Cluster) %>%
+  summarize(count = n())
+
+print(model_cluster_distribution)
+```
