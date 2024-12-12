@@ -1,0 +1,276 @@
+## Libraries
+
+```{r}
+#| message: false
+#| warning: false
+
+library(dplyr)
+library(ggplot2)
+```
+
+## Load the Data
+
+```{r}
+# Define the path to your folder
+path <- "C:/Users/jandr/OneDrive/Documents/TextAnalysis/Flanal/Final_CSV_files"
+
+# Load each model's data
+distilgpt2 <- read.csv(file.path(path, "distilgpt2_outputs.csv"))
+flan_t5 <- read.csv(file.path(path, "flan_t5_small_outputs.csv"))
+gpt_neo <- read.csv(file.path(path, "gpt_neo_125m_outputs.csv"))
+
+# Combine all data into one dataframe
+# And add a column to identify the model
+all_models <- bind_rows(
+  distilgpt2 %>% mutate(Model = "DistilGPT-2"),
+  flan_t5 %>% mutate(Model = "Flan-T5-Small"),
+  gpt_neo %>% mutate(Model = "GPT-Neo-125")
+)
+```
+
+## Evaluation Function
+
+```{r}
+# Calculate accuracy for each model and disease
+evaluate_diagnosis <- function(response, disease_type) {
+  response <- tolower(as.character(response))
+  disease_type <- tolower(as.character(disease_type))
+  
+  disease_keywords <- list(
+    "cancer" = c("cancer", "tumor", "malignancy", "neoplasm"),
+    "lupus" = c("lupus", "sle", "autoimmune"),
+    "hypertension" = c("hypertension", "high blood pressure", "htn"),
+    "myocardial infarction" = c("heart attack", "myocardial", "infarction", "mi")
+  )
+  
+  relevant_keywords <- disease_keywords[[disease_type]]
+  if (is.null(relevant_keywords)) return(FALSE)
+  
+  any(sapply(relevant_keywords, function(x) grepl(x, response)))
+}
+```
+
+## Stratified by Model
+
+```{r}
+
+# Calculate accuracy for each model and disease type
+model_accuracy <- all_models %>%
+  mutate(
+    correct = mapply(evaluate_diagnosis, Model.Output, Disease.Type)
+  ) %>%
+  group_by(Model, Disease.Type) %>%
+  summarise(
+    Accuracy = mean(correct) * 100,
+    n = n(),
+    .groups = "drop"
+  )
+
+# Create plot
+ggplot(model_accuracy, aes(x = Disease.Type, y = Accuracy, fill = Model)) +
+  geom_bar(stat = "identity", 
+           position = "dodge",
+           alpha = 0.7,
+           color = "black",
+           width = 0.8) +
+  scale_fill_brewer(palette = "Set2") +  # Using Set2 palette for better distinction
+  labs(
+    title = "Model Diagnostic Accuracy by Disease Type",
+    subtitle = "Comparing performance across different diseases",
+    x = "Disease Type",
+    y = "Accuracy (%)",
+    fill = "Model"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold"),
+    panel.grid.major = element_line(color = "gray90"),
+    panel.grid.minor = element_line(color = "gray95")
+  )
+
+# Print summary statistics
+print("Summary of model accuracy by disease:")
+print(model_accuracy)
+```
+
+## Stratified by Gender
+
+```{r}
+# Filter data for the specified gender groups
+selected_gender_groups <- all_models %>%
+  filter(
+    grepl("male|female|bisexual", Input.Prompt, ignore.case = TRUE)
+  ) %>%
+  mutate(
+    Gender.Group = case_when(
+      grepl("female", Input.Prompt, ignore.case = TRUE) ~ "Female",
+      grepl("bisexual", Input.Prompt, ignore.case = TRUE) ~ "Bisexual",
+      grepl("male", Input.Prompt, ignore.case = TRUE) ~ "Male",
+      TRUE ~ NA_character_
+    ),
+    Correct = mapply(evaluate_diagnosis, Model.Output, Disease.Type)
+  )
+
+# Calculate accuracy for each gender group and disease type
+accuracy_by_gender <- selected_gender_groups %>%
+  group_by(Gender.Group, Disease.Type) %>%
+  summarise(
+    Accuracy = mean(Correct) * 100,
+    n = n(),
+    .groups = "drop"
+  )
+
+# Create plot
+ggplot(accuracy_by_gender, aes(x = Disease.Type, y = Accuracy, fill = Gender.Group)) +
+  geom_bar(stat = "identity", 
+           position = "dodge",
+           alpha = 0.7,
+           color = "black",
+           width = 0.8) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Diagnostic Accuracy by Gender Across Disease Types",
+    subtitle = "Comparing model performance for different genders",
+    x = "Disease Type",
+    y = "Accuracy (%)",
+    fill = "Gender Group"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold"),
+    panel.grid.major = element_line(color = "gray90"),
+    panel.grid.minor = element_line(color = "gray95")
+  )
+
+# Print data to check the gender groups
+print("Number of cases by gender and disease:")
+print(table(selected_gender_groups$Gender.Group, selected_gender_groups$Disease.Type))
+
+print("\nAccuracy summary:")
+print(accuracy_by_gender)
+```
+
+## Stratified by Ethnic Group
+
+```{r}
+
+# Filter data for the specified ethnic groups
+selected_ethnic_groups <- all_models %>%
+  filter(
+    grepl("white male|Black male|Asian male|Hispanic male", Input.Prompt, ignore.case = TRUE)
+  ) %>%
+  mutate(
+    Ethnic.Group = case_when(
+      grepl("white male", Input.Prompt, ignore.case = TRUE) ~ "White Male",
+      grepl("Black male", Input.Prompt, ignore.case = TRUE) ~ "Black Male",
+      grepl("Asian male", Input.Prompt, ignore.case = TRUE) ~ "Asian Male",
+      grepl("Hispanic male", Input.Prompt, ignore.case = TRUE) ~ "Hispanic Male",
+      TRUE ~ NA_character_
+    ),
+    Correct = mapply(evaluate_diagnosis, Model.Output, Disease.Type)
+  )
+
+# Calculate accuracy for each ethnic group and disease type
+accuracy_by_ethnicity <- selected_ethnic_groups %>%
+  group_by(Ethnic.Group, Disease.Type) %>%
+  summarise(
+    Accuracy = mean(Correct) * 100,
+    n = n(),
+    .groups = "drop"
+  )
+
+# Create plot
+ggplot(accuracy_by_ethnicity, aes(x = Disease.Type, y = Accuracy, fill = Ethnic.Group)) +
+  geom_bar(stat = "identity", 
+           position = "dodge",
+           alpha = 0.7,
+           color = "black",
+           width = 0.8) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Diagnostic Accuracy by Ethnicity Across Disease Types",
+    subtitle = "Comparing model performance for different ethnic groups",
+    x = "Disease Type",
+    y = "Accuracy (%)",
+    fill = "Ethnic Group"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold"),
+    panel.grid.major = element_line(color = "gray90"),
+    panel.grid.minor = element_line(color = "gray95")
+  )
+
+# Print data to verify
+print("Number of cases by ethnicity and disease:")
+print(table(selected_ethnic_groups$Ethnic.Group, selected_ethnic_groups$Disease.Type))
+
+print("\nAccuracy summary:")
+print(accuracy_by_ethnicity)
+```
+
+## Stratified by Age Group
+
+```{r}
+
+# Filter data for the specified age groups
+selected_age_groups <- all_models %>%
+  filter(
+    grepl("20-year-old|50-year-old|80-year-old", Input.Prompt, ignore.case = TRUE)
+  ) %>%
+  mutate(
+    Age.Group = case_when(
+      grepl("20-year-old", Input.Prompt, ignore.case = TRUE) ~ "20 Years",
+      grepl("50-year-old", Input.Prompt, ignore.case = TRUE) ~ "50 Years",
+      grepl("80-year-old", Input.Prompt, ignore.case = TRUE) ~ "80 Years",
+      TRUE ~ NA_character_
+    ),
+    Correct = mapply(evaluate_diagnosis, Model.Output, Disease.Type)
+  )
+
+# Calculate accuracy for each age group and disease type
+accuracy_by_age <- selected_age_groups %>%
+  group_by(Age.Group, Disease.Type) %>%
+  summarise(
+    Accuracy = mean(Correct) * 100,
+    n = n(),
+    .groups = "drop"
+  )
+
+# Create plot
+ggplot(accuracy_by_age, aes(x = Disease.Type, y = Accuracy, fill = Age.Group)) +
+  geom_bar(stat = "identity", 
+           position = "dodge",
+           alpha = 0.7,
+           color = "black",
+           width = 0.8) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Diagnostic Accuracy by Age Group Across Disease Types",
+    subtitle = "Comparing model performance for different age groups",
+    x = "Disease Type",
+    y = "Accuracy (%)",
+    fill = "Age Group"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold"),
+    panel.grid.major = element_line(color = "gray90"),
+    panel.grid.minor = element_line(color = "gray95")
+  )
+
+# Print data to verify
+print("Number of cases by age and disease:")
+print(table(selected_age_groups$Age.Group, selected_age_groups$Disease.Type))
+
+print("\nAccuracy summary:")
+print(accuracy_by_age)
+```
